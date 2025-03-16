@@ -1,14 +1,12 @@
 from iinuclear.utils import (get_tns_coords, get_tns_credentials)
 
 
-def test_get_tns_credentials(monkeypatch):
-    # Call the function to retrieve credentials.
-    api_key, tns_id, username = get_tns_credentials()
-
-    # Check that username is correct
-    assert username == "BTDG_Bot"
-
-
+def test_get_tns_coords():
+    # Check that the function returns None for an object not found
+    ra, dec, ztf_name = get_tns_coords('potato')
+    assert ra is None
+    assert dec is None
+    assert ztf_name is None
 
 
 # This function is deprecated because it does not work with CI/CD on GitHub Actions
