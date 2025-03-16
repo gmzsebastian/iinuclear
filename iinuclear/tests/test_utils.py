@@ -5,11 +5,10 @@ from iinuclear.utils import (get_tns_coords, get_tns_credentials)
 
 # This marker will skip tests on GitHub Actions.
 skip_on_ci = pytest.mark.skipif(
-    os.environ.get('CI_TESTING') == 'true' or 
+    os.environ.get('CI_TESTING') == 'true' or
     os.environ.get('GITHUB_ACTIONS') == 'true',
     reason='Test skipped on CI environment'
 )
-
 
 
 def test_get_tns_coords():
@@ -18,30 +17,6 @@ def test_get_tns_coords():
     assert ra is None
     assert dec is None
     assert ztf_name is None
-
-
-def test_check_github_actions_env():
-    """Test to check if GITHUB_ACTIONS is in environment variables"""
-    is_github = 'GITHUB_ACTIONS' in os.environ
-    github_value = os.environ.get('GITHUB_ACTIONS', 'not found')
-    print(f"\nGITHUB_ACTIONS in env vars: {is_github}")
-    print(f"GITHUB_ACTIONS value: {github_value}")
-    
-    # This assertion will pass regardless of environment
-    # It's just to make the test valid
-    assert True
-
-def test_print_all_env_vars():
-    """Test that prints all environment variables"""
-    print("\nAll Environment Variables:")
-    print("-" * 50)
-    for key, value in sorted(os.environ.items()):
-        print(f"{key}: {value}")
-    print("-" * 50)
-    
-    # This assertion will pass regardless of environment
-    # It's just to make the test valid
-    assert True
 
 
 #########
