@@ -10,6 +10,7 @@ jobs:
         name: ${{ matrix.name }}
         runs-on: ${{ matrix.os }}
         env:
+          CI_TESTING: "true"
           TNS_API_KEY: ${{ secrets.TNS_API_KEY }}
           TNS_ID: ${{ secrets.TNS_ID }}
           TNS_USERNAME: ${{ secrets.TNS_USERNAME }}
@@ -46,4 +47,5 @@ jobs:
                 if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     
             - name: Run tests with tox
-              run: tox -e test
+              run: tox -e test -- -v -s --capture=no
+

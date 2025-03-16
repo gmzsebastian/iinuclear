@@ -5,9 +5,11 @@ from iinuclear.utils import (get_tns_coords, get_tns_credentials)
 
 # This marker will skip tests on GitHub Actions.
 skip_on_ci = pytest.mark.skipif(
+    os.environ.get('CI_TESTING') == 'true' or 
     os.environ.get('GITHUB_ACTIONS') == 'true',
-    reason='Test skipped on GitHub Actions'
+    reason='Test skipped on CI environment'
 )
+
 
 
 def test_get_tns_coords():
