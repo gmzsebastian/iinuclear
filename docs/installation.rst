@@ -3,12 +3,13 @@
 Installation
 ============
 
-The ``iinuclear`` package can be installed directly from the Github source.
+The ``iinuclear`` package can be installed directly from the GitHub source.
 
 From source
 -----------
 
-You can also install the ``iinuclear`` package directly from the source on `GitHub <https://github.com/gmzsebastian/iinuclear>`_.
+You can install the ``iinuclear`` package directly from the source on 
+`GitHub <https://github.com/gmzsebastian/iinuclear>`_ by running:
 
 .. code-block:: bash
 
@@ -19,19 +20,27 @@ You can also install the ``iinuclear`` package directly from the source on `GitH
 Dependencies
 ------------
 
-Some features require having a TNS API key, namely to obtain the coordinates of a transient given its IAU name. There are two ways to use this feature, one is
-to include these three environment variables in your system:
+Some features require a TNS API key to obtain the coordinates of a transient given its IAU name.
+There are two ways to provide these credentials:
 
-.. code-block:: bash
-    export TNS_API_KEY=api_key
-    export TNS_ID=tns_id
-    export TNS_USERNAME=tns_username
+1. **Using Environment Variables**
 
-Alternatively, you can create a file called ``tns_key.txt`` and place it in your home directly, with the same three variables as above:
+   Set the following three environment variables in your system:
 
-.. code-block:: bash
-api_key
-tns_id
-tns_username
+   .. code-block:: bash
 
-To obtain an API key, you can register at the `TNS website <https://wis-tns.weizmann.ac.il>`_.
+       export TNS_API_KEY=api_key
+       export TNS_ID=tns_id
+       export TNS_USERNAME=tns_username
+
+2. **Using a Local Key File**
+
+   Alternatively, create a file called ``tns_key.txt`` in your home directory with the following content:
+
+   .. code-block:: bash
+
+       api_key
+       tns_id
+       tns_username
+
+To obtain an API key, register at the `TNS website <https://wis-tns.weizmann.ac.il>`_.
