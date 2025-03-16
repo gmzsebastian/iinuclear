@@ -9,7 +9,7 @@ import sys
 from pkg_resources import DistributionNotFound, get_distribution
 
 try:
-    __version__ = get_distribution("nuclear").version
+    __version__ = get_distribution("iinuclear").version
 except DistributionNotFound:
     __version__ = "unknown version"
 
@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.abspath('../'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'nuclear'
+project = 'iinuclear'
 copyright = '2024, Sebastian Gomez'
 author = 'Sebastian Gomez'
 
