@@ -43,4 +43,4 @@ There are two ways to provide these credentials:
        tns_id
        tns_username
 
-To obtain an API key, register at the `TNS website <https://wis-tns.weizmann.ac.il>`_.
+To obtain an API key, register a BOT at the `TNS website <https://www.wis-tns.org/>`_.

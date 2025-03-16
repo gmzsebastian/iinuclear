@@ -1,6 +1,8 @@
 import os
 import pytest
-from iinuclear.utils import (get_tns_coords, get_tns_credentials)
+import numpy as np
+from iinuclear.utils import (get_tns_coords, get_tns_credentials, get_ztf_name,
+                             get_ztf_coordinates, get_coordinates)
 
 
 # This marker will skip tests on GitHub Actions.
@@ -17,6 +19,86 @@ def test_get_tns_coords():
     assert ra is None
     assert dec is None
     assert ztf_name is None
+
+
+def test_get_ztf_name():
+    # Test with known coordinates of 2018hyz
+    ra_true = 151.711964138
+    dec_true = 1.69279894089
+    ztf_name = get_ztf_name(ra_true, dec_true)
+    assert ztf_name == "ZTF18acpdvos"
+
+    # Test with invalid input types
+    ztf_name = get_ztf_name("potato", 1.0)
+    assert ztf_name is None
+
+
+def test_get_ztf_coordinates():
+    # Test with known ZTF object
+    ras, decs = get_ztf_coordinates("ZTF18acpdvos")
+    assert ras is not None
+    assert decs is not None
+    assert isinstance(ras, np.ndarray)
+    assert isinstance(decs, np.ndarray)
+    assert len(ras) > 0
+    assert len(decs) > 0
+
+    # Test some known coordinates (approximately)
+    assert np.isclose(np.median(ras), 151.712, rtol=1e-3)
+    assert np.isclose(np.median(decs), 1.693, rtol=1e-3)
+
+    # Test with invalid ZTF name
+    ras, decs = get_ztf_coordinates("potato")
+    assert ras is None
+    assert decs is None
+
+
+def test_get_coordinates():
+    # Test with IAU name
+    ras, decs, ztf_name, iau_name = get_coordinates("2018hyz")
+    assert ras is not None
+    assert decs is not None
+    assert isinstance(ras, np.ndarray)
+    assert isinstance(decs, np.ndarray)
+    assert ztf_name == "ZTF18acpdvos"
+    assert iau_name == "2018hyz"
+    assert np.isclose(np.median(ras), 151.712, rtol=1e-3)
+    assert np.isclose(np.median(decs), 1.693, rtol=1e-3)
+
+    # Test with ZTF name
+    ras, decs, ztf_name, iau_name = get_coordinates("ZTF18acpdvos")
+    assert ras is not None
+    assert decs is not None
+    assert isinstance(ras, np.ndarray)
+    assert isinstance(decs, np.ndarray)
+    assert ztf_name == "ZTF18acpdvos"
+    assert iau_name is None
+    assert np.isclose(np.median(ras), 151.712, rtol=1e-3)
+    assert np.isclose(np.median(decs), 1.693, rtol=1e-3)
+
+    # Test with coordinates
+    ras, decs, ztf_name, iau_name = get_coordinates(151.711964138, 1.69279894089)
+    assert ras is not None
+    assert decs is not None
+    assert isinstance(ras, np.ndarray)
+    assert isinstance(decs, np.ndarray)
+    assert ztf_name == "ZTF18acpdvos"
+    assert iau_name is None
+    assert np.isclose(np.median(ras), 151.712, rtol=1e-3)
+    assert np.isclose(np.median(decs), 1.693, rtol=1e-3)
+
+    # Test with invalid input
+    with pytest.raises(ValueError):
+        get_coordinates()  # No arguments
+    with pytest.raises(ValueError):
+        get_coordinates(1, 2, 3)  # Too many arguments
+
+    # Test with invalid object name
+    ras, decs, ztf_name, iau_name = get_coordinates("potato")
+    assert ras is None
+    assert decs is None
+    assert ztf_name is None
+    assert iau_name == "potato"
 
 
 #########

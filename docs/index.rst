@@ -8,7 +8,7 @@ Is it nuclear?
    :caption: User Guide
 
    installation
-   reference
+   usage
 
 For examples on how to access the data see the list of Tutorials below.
 
