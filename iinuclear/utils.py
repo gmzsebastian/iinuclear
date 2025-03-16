@@ -90,7 +90,7 @@ def get_tns_coords(tns_name):
 
     try:
         print(f"Querying TNS for coordinates for object '{tns_name}'...")
-        response = requests.post(object_endpoint, files=payload, verify=False, headers=headers)
+        response = requests.post(object_endpoint, files=payload, headers=headers)
         response.raise_for_status()
         response_json = response.json()
 
