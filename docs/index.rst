@@ -16,7 +16,7 @@ For examples on how to access the data see the list of Tutorials below.
    :maxdepth: 1
    :caption: Tutorials
 
-   tutorials/lightcurve
+   tutorials/examples
 
 License & Attribution
 ---------------------

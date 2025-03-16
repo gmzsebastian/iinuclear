@@ -54,17 +54,6 @@ def test_get_ztf_coordinates():
 
 
 def test_get_coordinates():
-    # Test with IAU name
-    ras, decs, ztf_name, iau_name = get_coordinates("2018hyz")
-    assert ras is not None
-    assert decs is not None
-    assert isinstance(ras, np.ndarray)
-    assert isinstance(decs, np.ndarray)
-    assert ztf_name == "ZTF18acpdvos"
-    assert iau_name == "2018hyz"
-    assert np.isclose(np.median(ras), 151.712, rtol=1e-3)
-    assert np.isclose(np.median(decs), 1.693, rtol=1e-3)
-
     # Test with ZTF name
     ras, decs, ztf_name, iau_name = get_coordinates("ZTF18acpdvos")
     assert ras is not None
@@ -104,6 +93,20 @@ def test_get_coordinates():
 #########
 # These functions do not work with CI/CD on GitHub Actions #####
 #########
+@skip_on_ci
+def test_get_coordinates_iau():
+    # Test with IAU name
+    ras, decs, ztf_name, iau_name = get_coordinates("2018hyz")
+    assert ras is not None
+    assert decs is not None
+    assert isinstance(ras, np.ndarray)
+    assert isinstance(decs, np.ndarray)
+    assert ztf_name == "ZTF18acpdvos"
+    assert iau_name == "2018hyz"
+    assert np.isclose(np.median(ras), 151.712, rtol=1e-3)
+    assert np.isclose(np.median(decs), 1.693, rtol=1e-3)
+
+
 @skip_on_ci
 def test_get_tns_credentials():
     # Call the function to retrieve credentials.
