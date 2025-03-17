@@ -5,7 +5,7 @@ from astropy.visualization import ImageNormalize, LinearStretch, LogStretch, Sqr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
-from ..utils import rice_separation, check_nuclear, calc_separations
+from .utils import rice_separation, check_nuclear, calc_separations
 plt.rcParams.update({'font.size': 12})
 plt.rcParams.update({'font.family': 'serif'})
 
