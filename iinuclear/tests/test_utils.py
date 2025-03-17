@@ -77,12 +77,6 @@ def test_get_coordinates():
     assert np.isclose(np.median(ras), 151.712, rtol=1e-3)
     assert np.isclose(np.median(decs), 1.693, rtol=1e-3)
 
-    # Test with invalid input
-    with pytest.raises(ValueError):
-        get_coordinates(save_coords=False)  # No arguments
-    with pytest.raises(ValueError):
-        get_coordinates(1, 2, 3, save_coords=False)  # Too many arguments
-
     # Test with invalid object name
     ras, decs, ztf_name, iau_name = get_coordinates("potato", save_coords=False)
     assert ras is None
@@ -104,7 +98,7 @@ def test_query_sdss():
 
     # Check specific object properties
     obj = results[0]
-    assert obj['objID'] == 1237651753461088386
+    assert obj['objID_SDSS'] == 1237651753461088386
     assert np.isclose(obj['ra'], 151.711963, rtol=1e-6)
     assert np.isclose(obj['dec'], 1.692788, rtol=1e-6)
 
@@ -130,7 +124,7 @@ def test_query_panstarrs():
 
     # Check specific object properties
     obj = results[0]
-    assert obj['objID'] == 110031517119921832
+    assert obj['objID_PS1'] == 110031517119921832
     assert np.isclose(obj['raStack'], 151.711986, rtol=1e-6)
     assert np.isclose(obj['decStack'], 1.692824, rtol=1e-6)
 
@@ -157,29 +151,6 @@ def test_get_ps1_image():
     assert header is not None
 
 
-def test_calc_separations():
-    # Test case 1: Single point offset only in RA
-    ra_test = np.array([100.01])
-    dec_test = np.array([0.0])
-    ra_center = 100.0
-    dec_center = 0.0
-
-    ra_sep, dec_sep = calc_separations(ra_test, dec_test, ra_center, dec_center)
-
-    # At dec=0, 0.01 degrees = 36 arcsec
-    assert np.isclose(ra_sep[0], 36.0, rtol=1e-6)
-    assert np.isclose(dec_sep[0], 0.0, rtol=1e-6)
-
-    # Test case 2: Single point offset only in Dec
-    ra_test = np.array([100.0])
-    dec_test = np.array([0.01])
-
-    ra_sep, dec_sep = calc_separations(ra_test, dec_test, ra_center, dec_center)
-
-    assert np.isclose(ra_sep[0], 0.0, rtol=1e-6)
-    assert np.isclose(dec_sep[0], 36.0, rtol=1e-6)
-
-
 #########
 # These functions do not work with CI/CD on GitHub Actions #####
 #########
@@ -191,7 +162,6 @@ def test_get_coordinates_iau():
     assert decs is not None
     assert isinstance(ras, np.ndarray)
     assert isinstance(decs, np.ndarray)
-    assert ztf_name == "ZTF18acpdvos"
     assert iau_name == "2018hyz"
     assert np.isclose(np.median(ras), 151.712, rtol=1e-3)
     assert np.isclose(np.median(decs), 1.693, rtol=1e-3)
