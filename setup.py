@@ -17,6 +17,7 @@ setup(
         'matplotlib',
         'astropy',
         'scipy',
+        'astroquery',
         'emcee',
         'alerce'
     ]

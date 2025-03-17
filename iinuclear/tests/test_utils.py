@@ -2,7 +2,8 @@ import os
 import pytest
 import numpy as np
 from iinuclear.utils import (get_tns_coords, get_tns_credentials, get_ztf_name,
-                             get_ztf_coordinates, get_coordinates)
+                             get_ztf_coordinates, get_coordinates, query_sdss,
+                             query_panstarrs, get_ps1_image, calc_separations)
 
 
 # This marker will skip tests on GitHub Actions.
@@ -55,7 +56,7 @@ def test_get_ztf_coordinates():
 
 def test_get_coordinates():
     # Test with ZTF name
-    ras, decs, ztf_name, iau_name = get_coordinates("ZTF18acpdvos")
+    ras, decs, ztf_name, iau_name = get_coordinates("ZTF18acpdvos", save_coords=False)
     assert ras is not None
     assert decs is not None
     assert isinstance(ras, np.ndarray)
@@ -66,7 +67,7 @@ def test_get_coordinates():
     assert np.isclose(np.median(decs), 1.693, rtol=1e-3)
 
     # Test with coordinates
-    ras, decs, ztf_name, iau_name = get_coordinates(151.711964138, 1.69279894089)
+    ras, decs, ztf_name, iau_name = get_coordinates(151.711964138, 1.69279894089, save_coords=False)
     assert ras is not None
     assert decs is not None
     assert isinstance(ras, np.ndarray)
@@ -78,16 +79,105 @@ def test_get_coordinates():
 
     # Test with invalid input
     with pytest.raises(ValueError):
-        get_coordinates()  # No arguments
+        get_coordinates(save_coords=False)  # No arguments
     with pytest.raises(ValueError):
-        get_coordinates(1, 2, 3)  # Too many arguments
+        get_coordinates(1, 2, 3, save_coords=False)  # Too many arguments
 
     # Test with invalid object name
-    ras, decs, ztf_name, iau_name = get_coordinates("potato")
+    ras, decs, ztf_name, iau_name = get_coordinates("potato", save_coords=False)
     assert ras is None
     assert decs is None
     assert ztf_name is None
     assert iau_name == "potato"
+
+
+def test_query_sdss():
+    # Known coordinates
+    ra, dec = 151.711964138, 1.69279894089
+
+    # Query with small radius
+    results = query_sdss(ra, dec, 0.5)
+
+    # Check that we got results
+    assert results is not None
+    assert len(results) > 0
+
+    # Check specific object properties
+    obj = results[0]
+    assert obj['objID'] == 1237651753461088386
+    assert np.isclose(obj['ra'], 151.711963, rtol=1e-6)
+    assert np.isclose(obj['dec'], 1.692788, rtol=1e-6)
+
+    # Check magnitudes
+    assert np.isclose(obj['modelMag_r'], 16.77018, rtol=1e-5)
+    assert np.isclose(obj['petroR50_r'], 1.446192, rtol=1e-5)
+
+    # Test with invalid coordinates
+    results = query_sdss(0.0, 0.0, 0.5)
+    assert results is None or len(results) == 0
+
+
+def test_query_panstarrs():
+    # Known coordinates
+    ra, dec = 151.711964138, 1.69279894089
+
+    # Query with small radius
+    results = query_panstarrs(ra, dec, 0.5)
+
+    # Check that we got results
+    assert results is not None
+    assert len(results) > 0
+
+    # Check specific object properties
+    obj = results[0]
+    assert obj['objID'] == 110031517119921832
+    assert np.isclose(obj['raStack'], 151.711986, rtol=1e-6)
+    assert np.isclose(obj['decStack'], 1.692824, rtol=1e-6)
+
+    # Check magnitudes
+    assert np.isclose(obj['iKronMag'], 16.7816, rtol=1e-4)
+    assert np.isclose(obj['iKronRad'], 4.61037, rtol=1e-5)
+
+
+def test_get_ps1_image():
+    import numpy as np
+
+    # Known coordinates of 2018hyz
+    ra, dec = 151.711964138, 1.69279894089
+
+    # Get the image data
+    data, header = get_ps1_image(ra, dec, save_image=False)
+
+    # Check we got valid image data
+    assert data is not None
+    assert isinstance(data, np.ndarray)
+    assert not np.all(data == 0)  # Image isn't empty
+
+    # Check header
+    assert header is not None
+
+
+def test_calc_separations():
+    # Test case 1: Single point offset only in RA
+    ra_test = np.array([100.01])
+    dec_test = np.array([0.0])
+    ra_center = 100.0
+    dec_center = 0.0
+
+    ra_sep, dec_sep = calc_separations(ra_test, dec_test, ra_center, dec_center)
+
+    # At dec=0, 0.01 degrees = 36 arcsec
+    assert np.isclose(ra_sep[0], 36.0, rtol=1e-6)
+    assert np.isclose(dec_sep[0], 0.0, rtol=1e-6)
+
+    # Test case 2: Single point offset only in Dec
+    ra_test = np.array([100.0])
+    dec_test = np.array([0.01])
+
+    ra_sep, dec_sep = calc_separations(ra_test, dec_test, ra_center, dec_center)
+
+    assert np.isclose(ra_sep[0], 0.0, rtol=1e-6)
+    assert np.isclose(dec_sep[0], 36.0, rtol=1e-6)
 
 
 #########

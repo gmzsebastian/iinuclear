@@ -6,6 +6,7 @@ matplotlib
 corner
 requests
 alerce
+astroquery
 
 # Testing dependencies
 pytest
