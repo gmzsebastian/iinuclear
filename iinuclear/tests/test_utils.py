@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 from iinuclear.utils import (get_tns_coords, get_tns_credentials, get_ztf_name,
                              get_ztf_coordinates, get_coordinates, query_sdss,
-                             query_panstarrs, get_ps1_image, calc_separations)
+                             query_panstarrs, get_ps1_image)
 
 
 # This marker will skip tests on GitHub Actions.

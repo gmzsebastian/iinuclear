@@ -576,7 +576,8 @@ def get_ps1_image(ra_deg, dec_deg, size_arcsec=60, band='i', save_image=True, ou
         return None, None
 
 
-def calc_separations(ra_array, dec_array, ra_center, dec_center):
+def calc_separations(ra_array, dec_array, ra_center, dec_center,
+                     separate=False):
     """
     Calculate the separation in arcseconds between arrays of
     coordinates and a central position using astropy.
@@ -591,12 +592,28 @@ def calc_separations(ra_array, dec_array, ra_center, dec_center):
         Central Right Ascension in degrees
     dec_center : float
         Central Declination in degrees
+    separate : bool, optional
+        Separate measurements into RA and DEC
+        (Only valid for small angles)
 
     Returns
     -------
     sep_ra : np.array
         Array of separations in RA in arcseconds
+    delta_ra, delta_dec : np.array
+        Separations in RA and DEC in arcsec
     """
+
+    if separate:
+        # Calculate simple differences
+        delta_dec = (dec_array - dec_center) * 3600
+
+        # For RA, we need to account for the cos(dec) factor
+        # We use the mean declination for the correction as we're assuming small distances
+        cos_dec = np.cos(np.radians(dec_center))
+        delta_ra = ((ra_array - ra_center) * cos_dec) * 3600
+
+        return delta_ra, delta_dec
 
     # Create SkyCoord objects for comparison
     c1 = SkyCoord(ra_array*u.deg, dec_array*u.deg)
@@ -682,6 +699,9 @@ def get_closest_match(ra_deg, dec_deg, search_radius=3, save_catalog=True, outpu
         result = closest_sdss
     else:
         result = closest_ps1
+
+    # Make sure it's a table
+    result = table.Table(result)
 
     if save_catalog:
         # Create directory if it does not exist

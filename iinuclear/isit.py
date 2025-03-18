@@ -16,5 +16,5 @@ def isit(*args):
 
     plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
              object_name=object_name)
-    plt.savefig('iinuclear.png')
-    plt.close()
+    plt.savefig(f'{object_name}_iinuclear.pdf', bbox_inches = 'tight')
+    plt.clf();plt.close('all')
