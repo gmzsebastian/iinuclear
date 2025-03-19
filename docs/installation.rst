@@ -1,46 +1,71 @@
-.. _install:
+.. _installation:
 
 Installation
 ============
 
-The ``iinuclear`` package can be installed directly from the GitHub source.
+There are two ways to install ``iinuclear``: using pip or from source.
+
+Using pip
+---------
+
+To install the latest release version::
+
+    pip install iinuclear
 
 From source
 -----------
 
-You can install the ``iinuclear`` package directly from the source on 
-`GitHub <https://github.com/gmzsebastian/iinuclear>`_ by running:
-
-.. code-block:: bash
+To install the latest development version directly from GitHub::
 
     git clone https://github.com/gmzsebastian/iinuclear.git
     cd iinuclear
-    python -m pip install -e .
+    pip install -e .
 
-Dependencies
-------------
+TNS API Setup
+-------------
 
-Some features require a TNS API key to obtain the coordinates of a transient given its IAU name.
-There are two ways to provide these credentials:
+Some features require access to the Transient Name Server (TNS). You'll need API credentials to query TNS data when using IAU names.
 
-1. **Using Environment Variables**
+Getting TNS API Credentials
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   Set the following three environment variables in your system:
+1. Register for a TNS account at https://www.wis-tns.org/
+2. Once logged in, go to "User Area" → "API tokens"
+3. Create a new API key by registering a "BOT" account
+4. Note down these three items:
+   * Your API key
+   * Your TNS ID (Bot ID)
+   * Your TNS username (Bot name)
 
-   .. code-block:: bash
+Setting Up Credentials
+~~~~~~~~~~~~~~~~~~~~~~
 
-       export TNS_API_KEY=api_key
-       export TNS_ID=tns_id
-       export TNS_USERNAME=tns_username
+There are two ways to configure your TNS credentials:
 
-2. **Using a Local Key File**
+1. **Environment Variables (Recommended)**
 
-   Alternatively, create a file called ``tns_key.txt`` in your home directory with the following content:
+   Add these lines to your ``~/.bashrc``, ``~/.zshrc``, or equivalent::
 
-   .. code-block:: bash
+       export TNS_API_KEY="your_api_key_here"
+       export TNS_ID="your_tns_id_here"
+       export TNS_USERNAME="your_bot_name_here"
 
-       api_key
-       tns_id
-       tns_username
+   Then source your shell configuration file::
 
-To obtain an API key, register a BOT at the `TNS website <https://www.wis-tns.org/>`_.
+       source ~/.bashrc  # or ~/.zshrc
+
+2. **Configuration File**
+
+   Create a file named ``tns_key.txt`` in your home directory::
+
+       touch ~/tns_key.txt
+
+   Add your credentials to this file in the following format::
+
+       your_api_key_here
+       your_tns_id_here
+       your_bot_name_here
+
+   Set appropriate file permissions::
+
+       chmod 600 ~/tns_key.txt
