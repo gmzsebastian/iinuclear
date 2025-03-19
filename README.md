@@ -38,7 +38,7 @@ This will create a diagnostic plot showing:
 - Confidence assessment
 
 <p align="center">
-  <img src="docs/images/2018hyz_iinuclear.pdf" width="800">
+  <img src="docs/images/2018hyz_iinuclear.png" width="800">
   <br>
   <em>Example output for AT2018hyz showing: (top left) PanSTARRS image with ZTF positions overlaid, 
   (top right) separation histogram, (bottom left) ZTF position density plot, and 
