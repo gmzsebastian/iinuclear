@@ -14,9 +14,9 @@ of time-domain astronomy such as TDEs, AGN, or other nuclear transient phenomena
    :maxdepth: 2
    :caption: User Guide
 
-   Installation
-   Usage
-   Methodology
+   installation
+   usage
+   methodology
 
 Quick Start
 -----------
