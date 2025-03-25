@@ -1,20 +1,21 @@
-from astropy import table
-import numpy as np
-import os
-import json
-import pathlib
-import warnings
-from collections import OrderedDict
-import requests
-from scipy.stats import chi2
 from alerce.core import Alerce
-from astroquery.sdss import SDSS
-import astropy.units as u
+from astropy import table
 from astropy.coordinates import SkyCoord
-from astroquery.mast import Catalogs
 from astropy.io import fits
+from astroquery.ipac.irsa import Irsa
+from astroquery.mast import Catalogs
+from astroquery.sdss import SDSS
+from collections import OrderedDict
 from scipy import stats
 from scipy.optimize import minimize
+from scipy.stats import chi2
+import astropy.units as u
+import json
+import numpy as np
+import os
+import pathlib
+import requests
+import warnings
 
 # Suppress insecure request warnings (for development purposes only)
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
@@ -788,6 +789,118 @@ def get_data(*args, save_all=True, base_dir='.'):
     return ras, decs, ztf_name, iau_name, catalog_result, image_data, image_header
 
 
+def query_ztf_sources(ra_deg, dec_deg, search_radius=60, band='r', ZTF_DR=22,
+                      ngoodobsrel=5, min_medianmag=20):
+    """
+    Query ZTF Stacked Source Catalog around given RA and DEC.
+
+    Parameters
+    ----------
+    ra_deg : float
+        Right Ascension in degrees
+    dec_deg : float
+        Declination in degrees
+    search_radius : float
+        Search radius in arcseconds (default: 60")
+    band : str, optional
+        Filter to query ('g', 'r', or 'i') (default: 'r')
+    ZTF_DR : int, optional
+        ZTF Data Release (default: 22)
+    ngoodobsrel : int, optional
+        Minimum number of good observations
+    min_medianmag : float, optional
+        Minimum median magnitude for the source
+
+    Returns
+    -------
+    output_table : astropy.table.Table
+        Table of sources around the specified position
+    """
+    catalog = f'ztf_objects_dr{ZTF_DR}'
+    coord = SkyCoord(ra=ra_deg*u.deg, dec=dec_deg*u.deg, frame='icrs')
+    result_table = Irsa.query_region(coord, catalog=catalog, spatial='Cone', radius=search_radius * u.arcsec)
+    print(f"Found {len(result_table)} sources in ZTF {band} band")
+
+    # Filter by band
+    output_table = result_table[result_table['filtercode'] == f'z{band}']
+    print(f"Found {len(output_table)} sources in ZTF {band} band")
+
+    # Filter by number of detections
+    output_table = output_table[output_table['ngoodobsrel'] >= ngoodobsrel]
+    print(f"Found {len(output_table)} sources with at least {ngoodobsrel} good observations")
+
+    # Filter by median magnitude
+    output_table = output_table[output_table['medianmag'] <= min_medianmag]
+    print(f"Found {len(output_table)} sources with median magnitude <= {min_medianmag}")
+
+    return output_table
+
+
+def calc_astrometric_error(ra_deg, dec_deg, search_radius=60, band='r', min_ps1_mag=22, max_diff=0.2,
+                           max_separation=1.0, ZTF_DR=22, ngoodobsrel=5, min_medianmag=20):
+    """
+    Function to calculate the astrometric error for a transient based on ZTF and PS1 data.
+
+    Parameters
+    ----------
+    ra_deg : float
+        Right Ascension in degrees
+    dec_deg : float
+        Declination in degrees
+    search_radius : float, optional
+        Search radius in arcseconds (default: 60")
+    band : str, optional
+        Filter to query ('g', 'r', or 'i') (default: 'r')
+    min_ps1_mag : float, optional
+        Minimum PS1 magnitude to consider (default: 22)
+    max_diff : float, optional
+        Maximum difference between PSF and Kron magnitudes (default: 0.2)
+    max_separation : float, optional
+        Maximum separation between PS1 and ZTF sources in arcseconds (default: 1.0)
+    ZTF_DR : int, optional
+        ZTF Data Release (default: 22)
+    ngoodobsrel : int, optional
+        Minimum number of good observations for ZTF sources
+    min_medianmag : float, optional
+        Minimum median magnitude for ZTF sources
+
+    Returns
+    -------
+    mean_abs_total : float
+        Mean absolute total separation between PS1 and ZTF sources in arcseconds
+    """
+
+    # Query ZTF and PS1 catalogs
+    ztf_table = query_ztf_sources(ra_deg, dec_deg, search_radius, band, ZTF_DR, ngoodobsrel, min_medianmag)
+    ps1_table_in = query_panstarrs(ra_deg, dec_deg, search_radius)
+
+    # Crop PS1 table based on magnitude
+    ps1_table = ps1_table_in[(ps1_table_in[f'{band}KronMag'] < min_ps1_mag) & (ps1_table_in[f'{band}KronMag'] > 0)]
+    print("Found {} PS1 sources with {} < {} mag".format(len(ps1_table), band, min_ps1_mag))
+
+    # Rule out galaxies by doing PSF - Kron magnitude
+    diff = ps1_table[f'{band}PSFMag'] - ps1_table[f'{band}KronMag']
+    ps1_table = ps1_table[(diff < max_diff) & (diff > -0.2)]
+    print("Found {} PS1 sources with PSF - Kron < {}".format(len(ps1_table), max_diff))
+
+    # Create SkyCoord objects for both catalogs
+    ps1_coords = SkyCoord(ra=ps1_table['raStack'], dec=ps1_table['decStack'], unit=(u.deg, u.deg))
+    ztf_coords = SkyCoord(ra=ztf_table['ra'], dec=ztf_table['dec'], unit=(u.deg, u.deg))
+
+    # Find closest matches within max_separation
+    idx_ztf, d2d, _ = ps1_coords.match_to_catalog_sky(ztf_coords)
+
+    # Keep only matches within the specified separation
+    matches = d2d < (max_separation * u.arcsec)
+    print("Found {} matches within {} arcsec".format(np.sum(matches), max_separation))
+
+    # Calculate separations for matched sources
+    separations = d2d[matches]
+    mean_abs_total = np.mean(separations).to(u.arcsec).value
+
+    return mean_abs_total
+
+
 def get_galaxy_center(catalog_result, error=0.1, add_sdss=True, add_ps1=True):
     """
     Calculate the galaxy center and its uncertainty from catalog data.
@@ -882,6 +995,10 @@ def get_galaxy_center(catalog_result, error=0.1, add_sdss=True, add_ps1=True):
     # 2. Mean of formal errors
     ra_formal = np.mean(ra_errors) if len(ra_errors) > 0 else 0
     dec_formal = np.mean(dec_errors) if len(dec_errors) > 0 else 0
+
+    # 3. Additional systematic error
+    if error is None:
+        error = calc_astrometric_error(ra_galaxy, dec_galaxy)
 
     # Combine errors in quadrature and convert to arcseconds
     error_arcsec = np.sqrt(np.sqrt((ra_std**2 + ra_formal**2 +

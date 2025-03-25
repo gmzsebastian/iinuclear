@@ -61,6 +61,7 @@ This function determines the center of the host galaxy:
 
 * Combines position measurements from different filters and surveys.
 * Includes a minimum uncertainty (default of 0.1 arcsec) to account for astrometric solution limitations.
+* Alternatively, if no error is given, this will be calculated from the positional uncertainties between ZTF and PanSTARRS.
 * Returns central coordinates and total positional uncertainty.
 
 .. code-block:: python
