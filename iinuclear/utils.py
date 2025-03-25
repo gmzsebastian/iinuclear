@@ -464,6 +464,7 @@ def query_panstarrs(ra_deg, dec_deg, search_radius=3, DR=2):
         ]
 
         # Query PS1
+        print("Querying PanSTARRS...")
         catalog_data = Catalogs.query_region(
             coordinates=coords,
             catalog="PANSTARRS",
@@ -818,6 +819,7 @@ def query_ztf_sources(ra_deg, dec_deg, search_radius=60, band='r', ZTF_DR=22,
     """
     catalog = f'ztf_objects_dr{ZTF_DR}'
     coord = SkyCoord(ra=ra_deg*u.deg, dec=dec_deg*u.deg, frame='icrs')
+    print(f"Querying ZTF sources around RA={ra_deg}, DEC={dec_deg}")
     result_table = Irsa.query_region(coord, catalog=catalog, spatial='Cone', radius=search_radius * u.arcsec)
     print(f"Found {len(result_table)} sources in ZTF {band} band")
 
@@ -898,6 +900,7 @@ def calc_astrometric_error(ra_deg, dec_deg, search_radius=60, band='r', min_ps1_
     separations = d2d[matches]
     mean_abs_total = np.mean(separations).to(u.arcsec).value
 
+    print("Mean astrometric error: {:.2f} arcsec".format(mean_abs_total))
     return mean_abs_total
 
 

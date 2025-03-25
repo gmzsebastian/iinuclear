@@ -289,10 +289,6 @@ def plot_detections(ras, decs, ra_galaxy=None, dec_galaxy=None, error_arcsec=Non
     # Center RA and DEC on plot
     delta_ra, delta_dec = calc_separations(ras, decs, ra_center, dec_center, separate=True)
 
-    # Create density estimate
-    positions = np.vstack([delta_ra, delta_dec])
-    kernel = stats.gaussian_kde(positions)
-
     # Create a fine grid for density plotting
     ra_range = np.max(delta_ra) - np.min(delta_ra)
     dec_range = np.max(delta_dec) - np.min(delta_dec)
@@ -302,12 +298,19 @@ def plot_detections(ras, decs, ra_galaxy=None, dec_galaxy=None, error_arcsec=Non
     y_grid = np.linspace(np.min(delta_dec) - margin, np.max(delta_dec) + margin, 100)
     xx, yy = np.meshgrid(x_grid, y_grid)
 
-    # Evaluate kernel on grid
-    positions_grid = np.vstack([xx.ravel(), yy.ravel()])
-    z = np.reshape(kernel(positions_grid).T, xx.shape)
+    # Create density estimate
+    positions = np.vstack([delta_ra, delta_dec])
+    if len(positions) < 3:
+        print('Not enough detections to create a KDE')
+    else:
+        kernel = stats.gaussian_kde(positions)
 
-    # Plot density contours
-    ax.contourf(xx, yy, z, levels=20, cmap='Blues', alpha=0.4)
+        # Evaluate kernel on grid
+        positions_grid = np.vstack([xx.ravel(), yy.ravel()])
+        z = np.reshape(kernel(positions_grid).T, xx.shape)
+
+        # Plot density contours
+        ax.contourf(xx, yy, z, levels=20, cmap='Blues', alpha=0.4)
 
     # Plot ZTF positions
     ax.scatter(delta_ra, delta_dec, s=50, edgecolor='Blue', facecolor='none',
