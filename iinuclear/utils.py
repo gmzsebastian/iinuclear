@@ -394,6 +394,9 @@ def query_sdss(ra_deg, dec_deg, search_radius=3, DR=18):
         # Rename objID to objID_SDSS
         results.rename_column('objID', 'objID_SDSS')
 
+        # Only return objects with an r-band offset less than the search_radius
+        results = results[np.abs(results['offsetRa_r']) < search_radius]
+
         return results
 
     except Exception as e:
