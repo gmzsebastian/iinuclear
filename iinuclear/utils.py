@@ -101,7 +101,7 @@ def get_tns_coords(tns_name):
     }
 
     try:
-        print(f"Querying TNS for coordinates for object '{tns_name}'...")
+        print(f"Querying TNS coordinates for object '{tns_name}'...")
         response = requests.post(object_endpoint, files=payload, headers=headers)
         response.raise_for_status()
         response_json = response.json()
@@ -666,6 +666,10 @@ def get_closest_match(ra_deg, dec_deg, search_radius=3, save_catalog=True, outpu
         if os.path.exists(local_file):
             print(f"Loading catalog data from {local_file}")
             return table.Table.read(local_file, format='ascii.csv')
+        local_file = os.path.join(output_dir, f"{object_name}.cat")
+        if os.path.exists(local_file):
+            print(f"Loading catalog data from {local_file}")
+            return table.Table.read(local_file, format='ascii')
 
     # Check for coordinate-based file
     local_file = os.path.join(output_dir, f"catalog_{ra_deg:.6f}_{dec_deg:.6f}.csv")
@@ -1115,6 +1119,8 @@ def check_nuclear(ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
 
     Returns
     -------
+    sigma : float
+        Significance of separation
     chi2_val : float
         Chi-square statistic
     p_value : float
@@ -1169,4 +1175,7 @@ def check_nuclear(ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
     # Compile results
     is_nuclear = p_value > p_threshold if not np.isnan(p_value) else None
 
-    return chi2_val, p_value, is_nuclear
+    # Calculate sigma significance
+    sigma = np.sqrt(chi2_val)
+
+    return sigma, chi2_val, p_value, is_nuclear

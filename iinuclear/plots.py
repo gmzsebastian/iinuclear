@@ -183,8 +183,14 @@ def plot_histogram(separations, error_arcsec, n_bins=15, ax=None,
 
     Returns
     --------
-    ax : matplotlib.axes.Axes
-        The axes object containing the plot
+    mean_separation : float
+        Mean separation calculated from Rice statistics
+    upper_err : float
+        Upper error on the mean separation
+    lower_err : float
+        Lower error on the mean separation
+    upper_limit : float
+        Upper limit on the separation at the specified confidence level
     """
     # Create figure if needed
     if ax is None:
@@ -233,7 +239,7 @@ def plot_histogram(separations, error_arcsec, n_bins=15, ax=None,
     ax.set_ylabel('Density')
     ax.legend(loc='upper right')
 
-    return ax
+    return mean_separation, upper_err, lower_err, upper_limit
 
 
 def plot_detections(ras, decs, ra_galaxy=None, dec_galaxy=None, error_arcsec=None,
@@ -431,15 +437,15 @@ def plot_pvalue_curve(ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
 
     # Calculate p-value for each error
     for err in error_range:
-        chi2_val, p_value, is_nuclear = check_nuclear(ras, decs, ra_galaxy, dec_galaxy, err)
+        sigma, chi2_val, p_value, is_nuclear = check_nuclear(ras, decs, ra_galaxy, dec_galaxy, err)
         p_values.append(p_value)
 
     # Calculate actual values for legend
-    chi2_val, p_val, is_nuclear = check_nuclear(ras, decs, ra_galaxy, dec_galaxy, error_arcsec)
+    sigma, chi2_val, p_val, is_nuclear = check_nuclear(ras, decs, ra_galaxy, dec_galaxy, error_arcsec)
 
     # Plot p-value curve
     ax.plot(error_range, p_values, 'k-', lw=2,
-            label=rf'$\sigma = {np.sqrt(chi2_val):.1f}$, $p = {p_val:.3f}$')
+            label=rf'$\sigma = {sigma:.1f}$, $p = {p_val:.3f}$')
 
     # Add horizontal line at p = 0.05
     ax.axhline(0.05, color='red', linestyle='--', alpha=0.5)
@@ -501,11 +507,27 @@ def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
     figsize : tuple, optional
         Figure size in inches (default: (12,12))
 
+
     Returns
     -------
-    fig : matplotlib.figure.Figure
-        The complete figure
+    sigma : float
+        Significance of separation
+    chi2_val : float
+        Chi-square statistic
+    p_value : float
+        P-value for the hypothesis test (null hypothesis: ZTF positions are consistent with galaxy center)
+    is_nuclear : bool
+        True if the ZTF positions are consistent with the galaxy center, False otherwise
+    mean_separation : float
+        Mean separation calculated from Rice statistics
+    upper_err : float
+        Upper error on the mean separation
+    lower_err : float
+        Lower error on the mean separation
+    upper_limit : float
+        Upper limit on the separation at the specified confidence level
     """
+
     # Create figure and gridspec
     fig = plt.figure(figsize=figsize)
     gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
@@ -528,8 +550,8 @@ def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
     # Plot 3: Separation histogram
     ax3 = fig.add_subplot(gs[0, 1])
     separations = calc_separations(ras, decs, ra_galaxy, dec_galaxy)
-    plot_histogram(separations, error_arcsec, object_name=object_name,
-                   ax=ax3)
+    mean_separation, upper_err, lower_err, upper_limit = plot_histogram(separations, error_arcsec, object_name=object_name,
+                                                                        ax=ax3)
 
     # Plot 4: P-value curve
     ax4 = fig.add_subplot(gs[1, 1])
@@ -537,10 +559,10 @@ def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
                       error_arcsec, ax=ax4)
 
     # Calculate actual values for legend
-    chi2_val, p_val, is_nuclear = check_nuclear(ras, decs, ra_galaxy, dec_galaxy, error_arcsec)
+    sigma, chi2_val, p_val, is_nuclear = check_nuclear(ras, decs, ra_galaxy, dec_galaxy, error_arcsec)
 
     # Add overall title if object name is provided
     if object_name:
         fig.suptitle(f'{object_name} = {is_nuclear}', fontsize=14, y=0.93)
 
-    return fig
+    return sigma, chi2_val, p_val, is_nuclear, mean_separation, upper_err, lower_err, upper_limit
