@@ -220,7 +220,7 @@ def get_ztf_coordinates(ztf_name):
         return None, None
 
 
-def get_coordinates(*args, save_coords=True, output_dir='coords'):
+def get_coordinates(*args, save_coords=True, coords_dir='coords'):
     """
     Get the coordinates (RA, DEC) for a transient using various identification methods.
     Can accept either an object name (IAU or ZTF) or RA/DEC coordinates.
@@ -233,7 +233,7 @@ def get_coordinates(*args, save_coords=True, output_dir='coords'):
         - Two floats representing RA and DEC in degrees
     save_coords : bool, optional
         Save the coordinates to disk (default: True)
-    output_dir : str, optional
+    coords_dir : str, optional
         Directory to save the coordinates (default: 'coords')
 
     Returns
@@ -260,24 +260,36 @@ def get_coordinates(*args, save_coords=True, output_dir='coords'):
                 iau_name = args[0]
         elif len(args) == 2:
             ra_deg, dec_deg = args
+        elif len(args) == 3:
+            if args[0].startswith("ZTF"):
+                ztf_name = args[0]
+            else:
+                iau_name = args[0]
+            ra_deg, dec_deg = args[1:]
 
         # Check for existing files
         if iau_name:
-            local_file = os.path.join(output_dir, f"{iau_name}_coords.csv")
+            local_file = os.path.join(coords_dir, f"{iau_name}_coords.csv")
+            alternative_file = os.path.join(coords_dir, f"{iau_name}.txt")
             if os.path.exists(local_file):
                 print(f"Loading coordinates from {local_file}")
                 coords = table.Table.read(local_file, format='ascii.csv')
                 return coords['RA'], coords['DEC'], ztf_name, iau_name
+            elif os.path.exists(alternative_file):
+                print(f"Loading coordinates from {alternative_file}")
+                coords = table.Table.read(alternative_file, format='ascii')
+                coords = coords[np.isfinite(coords['RA'])]
+                return coords['RA'], coords['DEC'], ztf_name, iau_name
 
         if ztf_name:
-            local_file = os.path.join(output_dir, f"{ztf_name}_coords.csv")
+            local_file = os.path.join(coords_dir, f"{ztf_name}_coords.csv")
             if os.path.exists(local_file):
                 print(f"Loading coordinates from {local_file}")
                 coords = table.Table.read(local_file, format='ascii.csv')
                 return coords['RA'], coords['DEC'], ztf_name, iau_name
 
         if len(args) == 2:
-            local_file = os.path.join(output_dir, f"coords_{ra_deg:.6f}_{dec_deg:.6f}.csv")
+            local_file = os.path.join(coords_dir, f"coords_{ra_deg:.6f}_{dec_deg:.6f}.csv")
             if os.path.exists(local_file):
                 print(f"Loading coordinates from {local_file}")
                 coords = table.Table.read(local_file, format='ascii.csv')
@@ -306,21 +318,24 @@ def get_coordinates(*args, save_coords=True, output_dir='coords'):
             ztf_name = get_ztf_name(ra_deg, dec_deg)
             if ztf_name is not None:
                 ras, decs = get_ztf_coordinates(ztf_name)
+            else:
+                iau_name = object_name
+
         else:
             raise ValueError("Must provide either object name or both RA and DEC in degrees.")
 
         # Save coordinates to file if we have valid coordinates
         if save_coords and ras is not None and decs is not None:
             # Create directory if it does not exist
-            os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(coords_dir, exist_ok=True)
 
             # Create filename based on available identifiers
             if iau_name is not None:
-                output_filename = os.path.join(output_dir, f"{iau_name}_coords.csv")
+                output_filename = os.path.join(coords_dir, f"{iau_name}_coords.csv")
             elif ztf_name is not None:
-                output_filename = os.path.join(output_dir, f"{ztf_name}_coords.csv")
+                output_filename = os.path.join(coords_dir, f"{ztf_name}_coords.csv")
             else:
-                output_filename = os.path.join(output_dir, f"coords_{ra_deg:.6f}_{dec_deg:.6f}.csv")
+                output_filename = os.path.join(coords_dir, f"coords_{ra_deg:.6f}_{dec_deg:.6f}.csv")
 
             # Save coordinates to file
             coords_table = table.Table({'RA': ras, 'DEC': decs})
@@ -373,6 +388,7 @@ def query_sdss(ra_deg, dec_deg, search_radius=3, DR=18):
             'objID', 'ra', 'dec', 'raErr', 'decErr',
             # PSF magnitudes
             'u', 'g', 'r', 'i', 'z',
+            'psfMag_u', 'psfMag_g', 'psfMag_r', 'psfMag_i', 'psfMag_z',
             # Model magnitudes
             'modelMag_u', 'modelMag_g', 'modelMag_r', 'modelMag_i', 'modelMag_z',
             'modelMagErr_u', 'modelMagErr_g', 'modelMagErr_r', 'modelMagErr_i', 'modelMagErr_z',
@@ -581,6 +597,92 @@ def get_ps1_image(ra_deg, dec_deg, size_arcsec=60, band='i', save_image=True, ou
         return None, None
 
 
+def get_sdss_image(ra_deg, dec_deg, size_arcsec=60, save_image=True, output_dir='images',
+                   object_name=None, band='i'):
+    """
+    Download a SDSS FITS cutout centered on given coordinates.
+
+    Parameters
+    ----------
+    ra_deg : float
+        Right Ascension in degrees
+    dec_deg : float
+        Declination in degrees
+    size_arcsec : int, optional
+        Size of cutout in arcseconds (default: 60)
+    save_image : bool, optional
+        Save the FITS file to disk (default: True)
+    output_dir : str, optional
+        Directory to save the FITS file (default: 'images')
+    object_name : str, optional
+        Object name to use in the filename (default: None)
+    band : str, optional
+        Filter to download ('g', 'r', 'i', 'z') (default: 'i')
+
+    Returns
+    -------
+    image_data : numpy.ndarray or None
+        Image data in the FITS file if successful, None if an error occurs
+    """
+
+    # Check for existing files
+    if object_name:
+        local_file = os.path.join(output_dir, f"{object_name}_{band}.fits")
+        if os.path.exists(local_file):
+            print(f"Loading image from {local_file}")
+            with fits.open(local_file) as hdul:
+                return hdul[0].data, hdul[0].header
+
+    # Check for coordinate-based file
+    local_file = os.path.join(output_dir, f"SDSS_{ra_deg:.6f}_{dec_deg:.6f}.fits")
+    if os.path.exists(local_file):
+        print(f"Loading image from {local_file}")
+        with fits.open(local_file) as hdul:
+            return hdul[0].data, hdul[0].header
+
+    # Convert size to pixels in arcsec/pixel
+    # plate_scale = 0.396  # SDSS plate scale in arcsec/pixel
+    # size_pix = int(size_arcsec / plate_scale)
+
+    try:
+        # Create coordinate object
+        coords = SkyCoord(ra=ra_deg*u.degree, dec=dec_deg*u.degree)
+
+        # Query SDSS for the image cutout
+        print("Querying SDSS for image...")
+        sdss_image = SDSS.get_images(coordinates=coords, radius=0.02*u.deg,
+                                     band=[band], cache=False)
+
+        if sdss_image is None or len(sdss_image) == 0:
+            print("No images found in SDSS")
+            return None, None
+
+        # Get the first image
+        hdul = sdss_image[0][0]
+
+        # Save the FITS file if requested
+        if save_image:
+            if object_name is not None:
+                output_filename = os.path.join(output_dir, f"{object_name}_{band}.fits")
+            else:
+                output_filename = os.path.join(output_dir, f"SDSS_{ra_deg:.6f}_{dec_deg:.6f}.fits")
+
+            # Create directory if it does not exist
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Save the FITS file
+            hdul.writeto(output_filename, overwrite=True)
+            print(f"Saved SDSS image to {output_filename}")
+
+        return hdul.data, hdul.header
+
+    except Exception as e:
+        print(f"Error downloading SDSS image: {str(e)}")
+        if 'output_filename' in locals() and os.path.exists(output_filename):
+            os.remove(output_filename)
+        return None, None
+
+
 def calc_separations(ra_array, dec_array, ra_center, dec_center,
                      separate=False):
     """
@@ -665,38 +767,59 @@ def get_closest_match(ra_deg, dec_deg, search_radius=3, save_catalog=True, outpu
         local_file = os.path.join(output_dir, f"{object_name}.csv")
         if os.path.exists(local_file):
             print(f"Loading catalog data from {local_file}")
-            return table.Table.read(local_file, format='ascii.csv')
+            result = table.Table.read(local_file, format='ascii.csv')
+            if 'objID_SDSS' in result.colnames:
+                used_catalog = 'SDSS'
+            elif 'objID_PS1' in result.colnames:
+                used_catalog = 'PS1'
+            return result, used_catalog
         local_file = os.path.join(output_dir, f"{object_name}.cat")
         if os.path.exists(local_file):
             print(f"Loading catalog data from {local_file}")
-            return table.Table.read(local_file, format='ascii')
+            result = table.Table.read(local_file, format='ascii')
+            if 'objID_SDSS' in result.colnames:
+                used_catalog = 'SDSS'
+            elif 'objID_PS1' in result.colnames:
+                used_catalog = 'PS1'
+            return result, used_catalog
 
     # Check for coordinate-based file
     local_file = os.path.join(output_dir, f"catalog_{ra_deg:.6f}_{dec_deg:.6f}.csv")
     if os.path.exists(local_file):
         print(f"Loading catalog data from {local_file}")
-        return table.Table.read(local_file, format='ascii.csv')
+        result = table.Table.read(local_file, format='ascii.csv')
+        if 'objID_SDSS' in result.colnames:
+            used_catalog = 'SDSS'
+        elif 'objID_PS1' in result.colnames:
+            used_catalog = 'PS1'
+        return result, used_catalog
 
     # Query both catalogs
+    used_catalog = None
     sdss_results = query_sdss(ra_deg, dec_deg, search_radius)
-    ps1_results = query_panstarrs(ra_deg, dec_deg, search_radius)
+    if sdss_results is None:
+        ps1_results = query_panstarrs(ra_deg, dec_deg, search_radius)
+    else:
+        ps1_results = None
 
     # If no results from either catalog, return None
     if sdss_results is None and ps1_results is None:
         print("No objects found in either catalog")
-        return None
+        return None, None
 
     # Calculate separations and find closest object from each catalog
     closest_sdss = None
     closest_ps1 = None
 
     if sdss_results is not None and len(sdss_results) > 0:
+        used_catalog = 'SDSS'
         sdss_seps = calc_separations(sdss_results['ra'], sdss_results['dec'],
                                      ra_deg, dec_deg)
         idx_sdss = np.argmin(sdss_seps)
         closest_sdss = sdss_results[idx_sdss]
 
-    if ps1_results is not None and len(ps1_results) > 0:
+    elif ps1_results is not None and len(ps1_results) > 0:
+        used_catalog = 'PS1'
         idx_ps1 = np.argmin(ps1_results['distance'])
         closest_ps1 = ps1_results[idx_ps1]
 
@@ -724,12 +847,13 @@ def get_closest_match(ra_deg, dec_deg, search_radius=3, save_catalog=True, outpu
         result.write(output_filename, format='ascii.csv', overwrite=True)
         print(f"Saved catalog data to {output_filename}")
 
-    return result
+    return result, used_catalog
 
 
-def get_data(*args, save_all=True, base_dir='.'):
+def get_data(*args, save_all=True, base_dir='.', coords_directory='coords', catalog_directory='catalogs',
+             images_directory='images'):
     """
-    Get coordinates, catalog data, and images for a transient using various identification methods.
+    Get the coordinates, reference catalog, and images for a given transient.
 
     Parameters
     -----------
@@ -737,10 +861,17 @@ def get_data(*args, save_all=True, base_dir='.'):
         Either:
         - A single string containing an object name from IAU or ZTF
         - Two floats representing RA and DEC in degrees
+        - Three arguments: object name, RA, and DEC
     save_all : bool, optional
         Save all data to disk (default: True)
     base_dir : str, optional
         Base directory for saving data (default: current directory)
+    coords_directory : str, optional
+        Directory to save coordinates (default: 'coords')
+    catalog_directory : str, optional
+        Directory to save catalog data (default: 'catalogs')
+    images_directory : str, optional
+        Directory to save images (default: 'images')
 
     Returns
     --------
@@ -754,50 +885,59 @@ def get_data(*args, save_all=True, base_dir='.'):
         The IAU name of the object
     catalog_result : astropy.table.Table
         Table containing catalog data
+    used_catalog : str
+        The catalog used ('SDSS', 'PS1', or None)
     image_data : numpy.ndarray
         Image data in the FITS file
     image_header : astropy.io.fits.Header
         FITS header for the image
     """
     # Set up output directories
-    coords_dir = os.path.join(base_dir, 'coords')
-    catalogs_dir = os.path.join(base_dir, 'catalogs')
-    images_dir = os.path.join(base_dir, 'images')
+    coords_dir = os.path.join(base_dir, coords_directory)
+    catalogs_dir = os.path.join(base_dir, catalog_directory)
+    images_dir = os.path.join(base_dir, images_directory)
 
-    # Get coordinates first
-    coords_result = get_coordinates(*args, save_coords=save_all,
-                                    output_dir=coords_dir)
-    ras, decs, ztf_name, iau_name = coords_result
+    # Get coordinates of the transient
+    ras, decs, ztf_name, iau_name = get_coordinates(*args, save_coords=save_all,
+                                                    coords_dir=coords_dir)
 
-    # If we got coordinates, get catalog and image data
+    # If we got coordinates, get the reference catalog and image data
     if ras is not None and len(ras) > 0:
         # Use median position for catalog and image queries
-        ra_center = np.median(ras)
-        dec_center = np.median(decs)
+        ra_center = np.nanmedian(ras)
+        dec_center = np.nanmedian(decs)
 
         # Get object name for filenames
         object_name = iau_name if iau_name is not None else ztf_name
 
         # Get catalog data
-        catalog_result = get_closest_match(ra_center, dec_center,
-                                           save_catalog=save_all,
-                                           output_dir=catalogs_dir,
-                                           object_name=object_name)
+        catalog_result, used_catalog = get_closest_match(ra_center, dec_center,
+                                                         save_catalog=save_all,
+                                                         output_dir=catalogs_dir,
+                                                         object_name=object_name)
 
         # Get PS1 image
-        image_data, image_header = get_ps1_image(ra_center, dec_center,
-                                                 save_image=save_all,
-                                                 output_dir=images_dir,
-                                                 object_name=object_name)
+        if used_catalog == 'PS1':
+            image_data, image_header = get_ps1_image(ra_center, dec_center,
+                                                     save_image=save_all,
+                                                     output_dir=images_dir,
+                                                     object_name=object_name)
+        elif used_catalog == 'SDSS':
+            image_data, image_header = get_sdss_image(ra_center, dec_center,
+                                                      save_image=save_all,
+                                                      output_dir=images_dir,
+                                                      object_name=object_name)
+
     else:
         catalog_result = None
+        used_catalog = None
         image_data = None
         image_header = None
 
-    return ras, decs, ztf_name, iau_name, catalog_result, image_data, image_header
+    return ras, decs, ztf_name, iau_name, catalog_result, used_catalog, image_data, image_header
 
 
-def query_ztf_sources(ra_deg, dec_deg, search_radius=60, band='r', ZTF_DR=22,
+def query_ztf_sources(ra_deg, dec_deg, search_radius=120, band='r', ZTF_DR=22,
                       ngoodobsrel=5, min_medianmag=20):
     """
     Query ZTF Stacked Source Catalog around given RA and DEC.
@@ -845,8 +985,9 @@ def query_ztf_sources(ra_deg, dec_deg, search_radius=60, band='r', ZTF_DR=22,
     return output_table
 
 
-def calc_astrometric_error(ra_deg, dec_deg, search_radius=60, band='r', min_ps1_mag=22, max_diff=0.2,
-                           max_separation=1.0, ZTF_DR=22, ngoodobsrel=5, min_medianmag=20):
+def calc_astrometric_error(ra_deg, dec_deg, object_name, search_radius=120, band='i', min_ps1_mag=22, max_diff=0.2,
+                           max_separation=0.5, ZTF_DR=22, ngoodobsrel=5, min_medianmag=20, ref_dir='reference',
+                           used_catalog=None):
     """
     Function to calculate the astrometric error for a transient based on ZTF and PS1 data.
 
@@ -872,46 +1013,149 @@ def calc_astrometric_error(ra_deg, dec_deg, search_radius=60, band='r', min_ps1_
         Minimum number of good observations for ZTF sources
     min_medianmag : float, optional
         Minimum median magnitude for ZTF sources
+    ref_dir : str, optional
+        Directory with the reference PS1 and ZTF catalogs
+    object_name : str
+        Name of the object to use for saving reference files
+    used_catalog : str, optional
+        Catalog used for the query ('PS1', 'SDSS', or None)
 
     Returns
     -------
     mean_abs_total : float
         Mean absolute total separation between PS1 and ZTF sources in arcseconds
+    mean_ra_offset : float
+        Mean RA offset in arcseconds (ZTF - PS1 or SDSS)
+    mean_dec_offset : float
+        Mean DEC offset in arcseconds (ZTF - PS1 or SDSS)
     """
 
     # Query ZTF and PS1 catalogs
-    ztf_table = query_ztf_sources(ra_deg, dec_deg, search_radius, band, ZTF_DR, ngoodobsrel, min_medianmag)
-    ps1_table_in = query_panstarrs(ra_deg, dec_deg, search_radius)
+    ztf_ref_name = os.path.join(ref_dir, f"{object_name}_ztf.txt")
+    ps1_ref_name = os.path.join(ref_dir, f"{object_name}_ps1.txt")
+    sdss_ref_name = os.path.join(ref_dir, f"{object_name}_sdss.txt")
 
-    # Crop PS1 table based on magnitude
-    ps1_table = ps1_table_in[(ps1_table_in[f'{band}KronMag'] < min_ps1_mag) & (ps1_table_in[f'{band}KronMag'] > 0)]
-    print("Found {} PS1 sources with {} < {} mag".format(len(ps1_table), band, min_ps1_mag))
+    # Empty variables for SDSS table
+    sdss_table_in = None
+    ps1_table_in = None
+    ztf_table_in = None
 
-    # Rule out galaxies by doing PSF - Kron magnitude
-    diff = ps1_table[f'{band}PSFMag'] - ps1_table[f'{band}KronMag']
-    ps1_table = ps1_table[(diff < max_diff) & (diff > -0.2)]
-    print("Found {} PS1 sources with PSF - Kron < {}".format(len(ps1_table), max_diff))
+    # Make sure directory exists
+    os.makedirs(ref_dir, exist_ok=True)
+
+    if os.path.exists(ztf_ref_name):
+        ztf_table_in = table.Table.read(ztf_ref_name, format='ascii')
+    else:
+        ztf_table_in = query_ztf_sources(ra_deg, dec_deg, search_radius, band, ZTF_DR, ngoodobsrel, min_medianmag)
+        if ztf_table_in is not None:
+            ztf_table_in.write(ztf_ref_name, format='ascii')
+
+    if ztf_table_in is not None and len(ztf_table_in) > 0:
+        # Crop ZTF table based on magnitude
+        ztf_table = ztf_table_in[(ztf_table_in['medianmag'] < min_ps1_mag) & (ztf_table_in['medianmag'] > 0)]
+        print("Found {} ZTF sources with medianmag < {} mag".format(len(ztf_table), min_ps1_mag))
+
+    if used_catalog == 'SDSS':
+        if os.path.exists(sdss_ref_name):
+            sdss_table_in = table.Table.read(sdss_ref_name, format='ascii')
+        else:
+            print('Querying SDSS for sources...')
+            sdss_table_in = query_sdss(ra_deg, dec_deg, search_radius)
+            if sdss_table_in is not None:
+                sdss_table_in.write(sdss_ref_name, format='ascii')
+
+        # Crop SDSS table based on magnitude
+        sdss_table = sdss_table_in[(sdss_table_in['r'] < min_ps1_mag) & (sdss_table_in['r'] > 0)]
+        print("Found {} SDSS sources with r < {} mag".format(len(sdss_table), min_ps1_mag))
+        # Rule out galaxies by doing PSF - Model magnitude
+        diff = sdss_table[f'psfMag_{band}'] - sdss_table[f'modelMag_{band}']
+        sdss_table = sdss_table[(diff < max_diff) & (diff > -0.2)]
+        print("Found {} SDSS sources with PSF - Model < {}".format(len(sdss_table), max_diff))
+
+        use_coords = SkyCoord(ra=sdss_table['ra'], dec=sdss_table['dec'], unit=(u.deg, u.deg))
+
+    elif used_catalog == 'PS1':
+        if os.path.exists(ps1_ref_name):
+            ps1_table_in = table.Table.read(ps1_ref_name, format='ascii')
+        else:
+            print('Querying PanSTARRS for sources...')
+            ps1_table_in = query_panstarrs(ra_deg, dec_deg, search_radius)
+            if ps1_table_in is not None:
+                ps1_table_in.write(ps1_ref_name, format='ascii')
+
+        # Crop PS1 table based on magnitude
+        ps1_table = ps1_table_in[(ps1_table_in[f'{band}KronMag'] < min_ps1_mag) & (ps1_table_in[f'{band}KronMag'] > 0)]
+        print("Found {} PS1 sources with {} < {} mag".format(len(ps1_table), band, min_ps1_mag))
+
+        # Rule out galaxies by doing PSF - Kron magnitude
+        diff = ps1_table[f'{band}PSFMag'] - ps1_table[f'{band}KronMag']
+        ps1_table = ps1_table[(diff < max_diff) & (diff > -0.2)]
+        print("Found {} PS1 sources with PSF - Kron < {}".format(len(ps1_table), max_diff))
+
+        use_coords = SkyCoord(ra=ps1_table['raStack'], dec=ps1_table['decStack'], unit=(u.deg, u.deg))
 
     # Create SkyCoord objects for both catalogs
-    ps1_coords = SkyCoord(ra=ps1_table['raStack'], dec=ps1_table['decStack'], unit=(u.deg, u.deg))
     ztf_coords = SkyCoord(ra=ztf_table['ra'], dec=ztf_table['dec'], unit=(u.deg, u.deg))
 
     # Find closest matches within max_separation
-    idx_ztf, d2d, _ = ps1_coords.match_to_catalog_sky(ztf_coords)
+    idx_ztf, d2d, _ = use_coords.match_to_catalog_sky(ztf_coords)
 
     # Keep only matches within the specified separation
     matches = d2d < (max_separation * u.arcsec)
-    print("Found {} matches within {} arcsec".format(np.sum(matches), max_separation))
 
-    # Calculate separations for matched sources
+    # Create arrays of valid matches with their separations
+    ps1_indices = np.where(matches)[0]
+    ztf_indices = idx_ztf[matches]
     separations = d2d[matches]
-    mean_abs_total = np.mean(separations).to(u.arcsec).value
 
-    print("Mean astrometric error: {:.2f} arcsec".format(mean_abs_total))
-    return mean_abs_total
+    # Remove duplicates by keeping only the closest match for each ZTF source
+    unique_matches = {}
+    for i, (ps1_idx, ztf_idx, sep) in enumerate(zip(ps1_indices, ztf_indices, separations)):
+        if ztf_idx not in unique_matches or sep < unique_matches[ztf_idx][1]:
+            unique_matches[ztf_idx] = (ps1_idx, sep)
+
+    # Extract the final matches and calculate offsets
+    final_separations = []
+    ra_offsets = []
+    dec_offsets = []
+
+    if len(unique_matches) == 0:
+        raise RuntimeError(f"No unique matches found within {search_radius} arcsec")
+
+    for ztf_idx, (ps1_idx, sep) in unique_matches.items():
+        final_separations.append(sep)
+
+        # Get coordinates for this match
+        if used_catalog == 'SDSS':
+            ps1_ra = sdss_table['ra'][ps1_idx]
+            ps1_dec = sdss_table['dec'][ps1_idx]
+        elif used_catalog == 'PS1':
+            ps1_ra = ps1_table['raMean'][ps1_idx]
+            ps1_dec = ps1_table['decMean'][ps1_idx]
+        ztf_ra = ztf_table['ra'][ztf_idx]
+        ztf_dec = ztf_table['dec'][ztf_idx]
+
+        # Calculate offsets in arcseconds (ZTF - PS1)
+        ra_offset, dec_offset = calc_separations(ztf_ra, ztf_dec, ps1_ra, ps1_dec, separate=True)
+
+        ra_offsets.append(ra_offset)
+        dec_offsets.append(dec_offset)
+
+    print("Found {} unique matches within {} arcsec (removed {} duplicates)".format(
+        len(final_separations), max_separation, np.sum(matches) - len(final_separations)))
+
+    # Calculate mean separation
+    mean_abs_total = np.nanmedian([sep.to(u.arcsec).value for sep in final_separations])
+    mean_ra_offset = np.nanmedian(ra_offsets)
+    mean_dec_offset = np.nanmedian(dec_offsets)
+
+    print("Mean astrometric error: {:.2f} arcsec with RA offset {:.2f} arcsec and DEC offset {:.2f} arcsec".format(
+        mean_abs_total, mean_ra_offset, mean_dec_offset))
+    return mean_abs_total, mean_ra_offset, mean_dec_offset
 
 
-def get_galaxy_center(catalog_result, error=0.1, add_sdss=True, add_ps1=True):
+def get_galaxy_center(catalog_result, used_catalog=None, object_name=None, error=0.1, add_sdss=True, add_ps1=True,
+                      search_radius=120, add_stack=False):
     """
     Calculate the galaxy center and its uncertainty from catalog data.
 
@@ -919,12 +1163,20 @@ def get_galaxy_center(catalog_result, error=0.1, add_sdss=True, add_ps1=True):
     ----------
     catalog_result : astropy.table.Table
         Catalog data from either SDSS or PS1
+    object_name : str, optional
+        Name of the object for astrometric error calculation (default: None)
+    used_catalog : str, optional
+        Catalog used ('SDSS', 'PS1', or None) (default: None)
     error : float, optional
         Additional systematic error in arcseconds (default: 0.1)
     add_sdss : bool, optional
         Include SDSS data in the calculation (default: True)
     add_ps1 : bool, optional
         Include PS1 data in the calculation (default: True)
+    search_radius : float, optional
+        Search radius in arcseconds for astrometric error calculation (default: 120)
+    add_stack : bool, optional
+        Include stack positions from PS1 (default: False)
 
     Returns
     -------
@@ -932,6 +1184,10 @@ def get_galaxy_center(catalog_result, error=0.1, add_sdss=True, add_ps1=True):
         Mean Right Ascension in degrees
     dec_galaxy : float
         Mean Declination in degrees
+    mean_ra_offset : float
+        Mean RA offset in arcseconds (ZTF - PS1 or SDSS)
+    mean_dec_offset : float
+        Mean DEC offset in arcseconds (ZTF - PS1 or SDSS)
     error_arcsec : float
         1-sigma radial error in arcseconds
     """
@@ -943,7 +1199,7 @@ def get_galaxy_center(catalog_result, error=0.1, add_sdss=True, add_ps1=True):
     dec_errors = []
 
     # Check if we have SDSS data
-    if ('ra' in catalog_result.colnames) and add_sdss:
+    if ('objID_SDSS' in catalog_result.colnames) and add_sdss:
         # Add main position
         ra_measurements.append(catalog_result['ra'][0])
         dec_measurements.append(catalog_result['dec'][0])
@@ -963,12 +1219,13 @@ def get_galaxy_center(catalog_result, error=0.1, add_sdss=True, add_ps1=True):
                     dec_errors.append(catalog_result['decErr'][0])
 
     # Check if we have PS1 data
-    if ('raStack' in catalog_result.colnames) and add_ps1:
+    if ('objID_PS1' in catalog_result.colnames) and add_ps1:
         # Add stack position
-        ra_measurements.append(catalog_result['raStack'][0])
-        dec_measurements.append(catalog_result['decStack'][0])
-        ra_errors.append(catalog_result['raStackErr'][0])
-        dec_errors.append(catalog_result['decStackErr'][0])
+        if add_stack:
+            ra_measurements.append(catalog_result['raStack'][0])
+            dec_measurements.append(catalog_result['decStack'][0])
+            ra_errors.append(catalog_result['raStackErr'][0])
+            dec_errors.append(catalog_result['decStackErr'][0])
 
         # Add mean position
         ra_measurements.append(catalog_result['raMean'][0])
@@ -994,90 +1251,113 @@ def get_galaxy_center(catalog_result, error=0.1, add_sdss=True, add_ps1=True):
     ra_weights = 1.0 / (ra_errors**2) if len(ra_errors) > 0 else None
     dec_weights = 1.0 / (dec_errors**2) if len(dec_errors) > 0 else None
 
-    ra_galaxy = np.average(ra_measurements, weights=ra_weights)
-    dec_galaxy = np.average(dec_measurements, weights=dec_weights)
+    use = np.isfinite(ra_measurements) & np.isfinite(dec_measurements) & np.isfinite(ra_weights) & np.isfinite(dec_weights)
+    ra_galaxy = np.average(ra_measurements[use], weights=ra_weights[use])
+    dec_galaxy = np.average(dec_measurements[use], weights=dec_weights[use])
 
     # Calculate total error combining:
     # 1. Standard deviation of measurements
-    ra_std = np.std(ra_measurements) * 3600
-    dec_std = np.std(dec_measurements) * 3600
+    ra_std = np.nanstd(ra_measurements) * 3600
+    dec_std = np.nanstd(dec_measurements) * 3600
 
     # 2. Mean of formal errors
-    ra_formal = np.mean(ra_errors) if len(ra_errors) > 0 else 0
-    dec_formal = np.mean(dec_errors) if len(dec_errors) > 0 else 0
+    ra_formal = np.nanmean(ra_errors) if len(ra_errors) > 0 else 0
+    dec_formal = np.nanmean(dec_errors) if len(dec_errors) > 0 else 0
 
     # 3. Additional systematic error
     if error is None:
-        error = calc_astrometric_error(ra_galaxy, dec_galaxy)
+        error, mean_ra_offset, mean_dec_offset = calc_astrometric_error(ra_galaxy, dec_galaxy, object_name, search_radius=search_radius,
+                                                                        used_catalog=used_catalog)
+    else:
+        mean_ra_offset = 0
+        mean_dec_offset = 0
 
     # Combine errors in quadrature and convert to arcseconds
     error_arcsec = np.sqrt(np.sqrt((ra_std**2 + ra_formal**2 +
                            dec_std**2 + dec_formal**2)) ** 2 + error ** 2)
 
-    return ra_galaxy, dec_galaxy, error_arcsec
+    return ra_galaxy, dec_galaxy, mean_ra_offset, mean_dec_offset, error_arcsec
 
 
 def rice_separation(separations, error_arcsec, confidence_level=0.95,
                     separation_threshold=3.0):
     """
-    Calculate the most likely separation and its uncertainty using a Rice distribution.
-    This is appropriate for measuring the magnitude of a 2D vector with Gaussian
-    noise in each component.
+    Calculate the most likely separation between a transient and a galaxy and the
+    uncertainty in this measurement using a Rice distribution. Assuming the
+    uncertainty in the position of the galaxy is Gaussian and symmetric along
+    RA and DEC.
 
     Parameters:
     -----------
     separations : np.array
         Array of measured separations between transient and galaxy (in arcsec)
     error_arcsec : float
-        Total measurement error in position (in arcsec)
+        Total measurement error in the position of the galaxy center (in arcsec)
     confidence_level : float, optional
-        Confidence level for upper limit (default: 0.95 for 95% confidence)
+        Confidence level for reporting the upper limit
+        (default: 0.95 for 95% confidence)
     separation_threshold : float, optional
         SNR threshold for considering a detection significant (default: 3.0)
 
     Returns:
     --------
-    separation : float
-        Most likely true separation between transient and galaxy
+    nu : float
+        Most likely separation between transient and galaxy.
     lower_error : float
-        Lower bound of the 68% confidence interval
+        Lower bound of the 68% confidence interval.
     upper_error : float
-        Upper bound of the 68% confidence interval
+        Upper bound of the 68% confidence interval.
+    snr : float
+        Signal-to-noise ratio of the measurement.
+    upper_limit : float
+        Upper limit on the separation at the specified confidence level.
+    sigma : float
+        Measurement noise in the galaxy center position (in arcsec).
     """
 
     # Define negative log likelihood for Rice distribution
     def neg_log_likelihood(params, data):
+        # True underlying separation (nu) and measurement noise (sigma)
         nu, sigma = params
+
+        # Make sure nu and sigma are not negative
         if nu < 0 or sigma <= 0:
             return np.inf
-        return -np.sum(stats.rice.logpdf(data, nu/sigma, scale=sigma))
 
-    # Initial guess:
-    # nu ~ mean of data (true separation)
-    # sigma ~ standard deviation of measurements
+        # Return the log likelihood
+        return -np.sum(stats.rice.logpdf(data, nu / sigma, scale=sigma))
+
+    # Initial guess for the fit
     initial_guess = [np.median(separations), np.std(separations)]
 
     # Find maximum likelihood estimates
+    bounds = [(0, None), (1e-6, None)]
     result = minimize(neg_log_likelihood, initial_guess,
-                      args=(separations,), method='Nelder-Mead')
-    mean_separation, sigma_separation = result.x
+                      args=(separations,), method='L-BFGS-B',
+                      bounds=bounds)
 
-    # Add position error in quadrature
-    total_sigma = np.sqrt(sigma_separation**2 + error_arcsec**2)
+    # Extract parameters
+    nu, sigma = result.x
 
-    # Calculate 1-sigma 68% confidence interval
-    r_low = stats.rice.ppf(0.16, mean_separation/total_sigma, scale=total_sigma)
-    r_high = stats.rice.ppf(0.84, mean_separation/total_sigma, scale=total_sigma)
+    # Add galaxy centering error
+    total_sigma = np.sqrt(sigma ** 2 + error_arcsec ** 2)
+    b_total = nu / total_sigma
 
-    lower_err = mean_separation - r_low
-    upper_err = r_high - mean_separation
+    # Calculate the median separation +/- 1-sigma errors
+    median_separation = stats.rice.ppf(0.50, b_total, scale=total_sigma)
+    r_low = stats.rice.ppf(0.16, b_total, scale=total_sigma)
+    r_high = stats.rice.ppf(0.84, b_total, scale=total_sigma)
+
+    # Convert these to an error measurement
+    lower_err = nu - r_low
+    upper_err = r_high - nu
 
     # Make sure this does not go below 0
     if lower_err <= 0:
-        lower_err = mean_separation
+        lower_err = nu
 
-    # Calculate signal-to-noise ratio
-    snr = mean_separation / total_sigma
+    # Calculate signal-to-noise ratio (>> 1 means its Gaussian)
+    snr = median_separation / total_sigma
 
     # Report upper limit
     upper_limit = stats.rice.ppf(confidence_level, 0, scale=total_sigma)
@@ -1085,14 +1365,14 @@ def rice_separation(separations, error_arcsec, confidence_level=0.95,
     # If separation is large, report simple stats
     if snr > separation_threshold:
         print(f"Reporting symmetric normal error for SNR={snr:.2f}... ")
-        mean_separation = np.median(separations)
+        nu = np.median(separations)
         stat_error = np.std(separations) / np.sqrt(len(separations))
         total_error = np.sqrt(stat_error**2 + error_arcsec**2)
         lower_err = upper_err = total_error
     else:
         print(f"Reporting asymmetric Rice error for SNR={snr:.2f}...")
 
-    return mean_separation, lower_err, upper_err, snr, upper_limit
+    return nu, lower_err, upper_err, snr, upper_limit, sigma
 
 
 def check_nuclear(ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
@@ -1160,7 +1440,7 @@ def check_nuclear(ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
         # Calculate inverse of total covariance matrix
         inv_cov_total = np.linalg.inv(cov_total)
         # Calculate chi-square using matrix multiplication
-        # d is the difference vector [Δra, Δdec] between mean ZTF and galaxy positions
+        # d is the difference vector [delta-ra, delta-dec] between the mean ZTF and galaxy positions
         # d.T is its transpose
         # This gives a scalar value that accounts for both the distance and uncertainties
         chi2_val = d.T @ inv_cov_total @ d

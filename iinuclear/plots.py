@@ -13,7 +13,7 @@ plt.rcParams.update({'font.family': 'serif'})
 
 def plot_image(image_data, image_header, ras, decs, radius_arcsec=2,
                scale='sqrt', figsize=(8, 8), ax=None, object_name=None,
-               ra_galaxy=None, dec_galaxy=None, error_arcsec=None):
+               ra_galaxy=None, dec_galaxy=None, error_arcsec=None, used_catalog=None):
     """
     Plot PS1 image with ZTF positions overlaid in WCS coordinates.
 
@@ -43,6 +43,8 @@ def plot_image(image_data, image_header, ras, decs, radius_arcsec=2,
         Galaxy center Dec in degrees
     error_arcsec : float, optional
         Error circle radius in arcseconds
+    used_catalog : str, optional
+        Name of the catalog used for galaxy center determination (default: None)
 
     Returns
     --------
@@ -80,8 +82,8 @@ def plot_image(image_data, image_header, ras, decs, radius_arcsec=2,
         stretch = LinearStretch()
 
     # Convert the median RA/DEC to pixel coordinates using the WCS
-    ra_center = np.median(ras)
-    dec_center = np.median(decs)
+    ra_center = np.nanmedian(ras)
+    dec_center = np.nanmedian(decs)
     center_pix = wcs.wcs_world2pix(ra_center, dec_center, 0)
     center_x, center_y = center_pix
 
@@ -152,7 +154,7 @@ def plot_image(image_data, image_header, ras, decs, radius_arcsec=2,
         else:
             ax.set_title(f'RA: {ra_center:.6f}, DEC: {dec_center:.6f}')
     else:
-        ax.set_title('PS1 Image')
+        ax.set_title(f'{used_catalog} Image')
 
     return ax
 
@@ -203,18 +205,22 @@ def plot_histogram(separations, error_arcsec, n_bins=15, ax=None,
         ax.set_title('Separations')
 
     # Calculate Rice statistics
-    mean_separation, lower_err, upper_err, snr, upper_limit = rice_separation(separations, error_arcsec,
-                                                                              confidence_level, separation_threshold)
+    mean_separation, lower_err, upper_err, snr, upper_limit, sigma = rice_separation(separations, error_arcsec,
+                                                                                     confidence_level, separation_threshold)
 
     # Create histogram
     ax.hist(separations, bins=n_bins, density=True, alpha=0.6, color='gray')
 
     # Add kernel density estimate
     kde = stats.gaussian_kde(separations)
-    x_range = np.linspace(0, max(separations), 100)
+    x_range = np.linspace(0, max(max(separations), 1.0), 100)
     kde_values = kde(x_range)
 
     ax.plot(x_range, kde_values, 'k-', lw=2, label=f'KDE: N = {len(separations)}')
+
+    # Plot best fit Rice distribution
+    rice_dist = stats.rice.pdf(x_range, mean_separation/sigma, scale=sigma)
+    ax.plot(x_range, rice_dist, 'orange', lw=2, label='Rice Fit')
 
     # Plot Rayleigh statistics
     ax.axvline(mean_separation, color='red', linestyle='-', linewidth=1,
@@ -237,6 +243,7 @@ def plot_histogram(separations, error_arcsec, n_bins=15, ax=None,
     # Add labels and legend
     ax.set_xlabel('Separation (arcsec)')
     ax.set_ylabel('Density')
+    ax.set_xlim(0, 1.0)
     ax.legend(loc='upper right')
 
     return mean_separation, upper_err, lower_err, upper_limit
@@ -288,12 +295,12 @@ def plot_detections(ras, decs, ra_galaxy=None, dec_galaxy=None, error_arcsec=Non
     ax.xaxis.set_major_formatter(ScalarFormatter(useOffset=False))
     ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
 
-    # Calculate the center and spread of detections
-    ra_center = np.median(ras)
-    dec_center = np.median(decs)
-
     # Center RA and DEC on plot
-    delta_ra, delta_dec = calc_separations(ras, decs, ra_center, dec_center, separate=True)
+    delta_ra, delta_dec = calc_separations(ras, decs, ra_galaxy, dec_galaxy, separate=True)
+
+    # Calculate the center and spread of detections
+    deltara_center = np.nanmedian(delta_ra)
+    deltadec_center = np.nanmedian(delta_dec)
 
     # Create a fine grid for density plotting
     ra_range = np.max(delta_ra) - np.min(delta_ra)
@@ -306,7 +313,7 @@ def plot_detections(ras, decs, ra_galaxy=None, dec_galaxy=None, error_arcsec=Non
 
     # Create density estimate
     positions = np.vstack([delta_ra, delta_dec])
-    if len(positions) < 3:
+    if len(delta_ra) < 3:
         print('Not enough detections to create a KDE')
     else:
         kernel = stats.gaussian_kde(positions)
@@ -323,21 +330,13 @@ def plot_detections(ras, decs, ra_galaxy=None, dec_galaxy=None, error_arcsec=Non
                marker='o', label='ZTF detections')
 
     # Plot median position of detections
-    ax.scatter(0, 0, s=100, color='cyan',
+    ax.scatter(deltara_center, deltadec_center, s=100, color='cyan',
                marker='+', label='ZTF center')
 
     # Calculate Covariance of ZTF detections
     Y = np.column_stack((delta_ra, delta_dec))
     star_mean = np.mean(Y, axis=0)
     cov_Y = np.cov(Y, rowvar=False, ddof=1)
-
-    # Plot the variance (±1 std) as dashed lines
-    std_x = np.sqrt(cov_Y[0, 0])
-    std_y = np.sqrt(cov_Y[1, 1])
-    ax.axvline(x=star_mean[0] + std_x, linestyle='--', linewidth=1, color='g')
-    ax.axvline(x=star_mean[0] - std_x, linestyle='--', linewidth=1, color='g')
-    ax.axhline(y=star_mean[1] + std_y, linestyle='--', linewidth=1, color='g')
-    ax.axhline(y=star_mean[1] - std_y, linestyle='--', linewidth=1, color='g')
 
     # Compute the ellipse parameters based on the covariance matrix
     vals, vecs = np.linalg.eigh(cov_Y)
@@ -353,8 +352,7 @@ def plot_detections(ras, decs, ra_galaxy=None, dec_galaxy=None, error_arcsec=Non
 
     # If galaxy center and error are provided, plot them
     if (ra_galaxy is not None) and (dec_galaxy is not None):
-        delta_galaxy_ra, delta_galaxy_dec = calc_separations(ra_galaxy, dec_galaxy, ra_center,
-                                                             dec_center, separate=True)
+        delta_galaxy_ra, delta_galaxy_dec = 0, 0
 
         if error_arcsec is not None:
             # Convert error from arcsec to degrees
@@ -372,7 +370,7 @@ def plot_detections(ras, decs, ra_galaxy=None, dec_galaxy=None, error_arcsec=Non
         radius_deg = radius_arcsec / 3600
     else:
         radius_deg = max(ra_range, dec_range) / 2
-    ax.set_xlim(radius_deg, -radius_deg)  # RA increases to the left
+    ax.set_xlim(-radius_deg, radius_deg)
     ax.set_ylim(-radius_deg, radius_deg)
     ax.set_aspect('equal', adjustable='box')
 
@@ -432,7 +430,7 @@ def plot_pvalue_curve(ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
 
     # Create array of error values to test
     # Go from 0.1 to 5 times the measured error
-    error_range = np.linspace(0.1 * error_arcsec, 5 * error_arcsec, 100)
+    error_range = np.linspace(0.1 * error_arcsec, 1, 100)
     p_values = []
 
     # Calculate p-value for each error
@@ -470,7 +468,7 @@ def plot_pvalue_curve(ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
     ax.set_yscale('log')
 
     # Set reasonable limits
-    ax.set_xlim(0, max(error_range))
+    ax.set_xlim(0, 1.0)
     ax.set_ylim(1e-4, 1)
 
     # Add legend
@@ -480,7 +478,8 @@ def plot_pvalue_curve(ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
 
 
 def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
-             error_arcsec, radius_arcsec=2, object_name=None, figsize=(13, 13)):
+             error_arcsec, radius_arcsec=2, object_name=None, used_catalog=None,
+             figsize=(13, 13)):
     """
     Create a 2x2 figure showing all analysis plots for a transient.
 
@@ -504,6 +503,8 @@ def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
         Radius of the region to plot in arcseconds (default: 2)
     object_name : str, optional
         Name of the object to include in the title
+    used_catalog : str, optional
+        Name of the catalog used for galaxy center determination (default: None)
     figsize : tuple, optional
         Figure size in inches (default: (12,12))
 
@@ -538,7 +539,7 @@ def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
                radius_arcsec=radius_arcsec, ax=ax1,
                object_name=object_name,
                ra_galaxy=ra_galaxy, dec_galaxy=dec_galaxy,
-               error_arcsec=error_arcsec)
+               error_arcsec=error_arcsec, used_catalog=used_catalog)
 
     # Plot 2: ZTF detections with density
     ax2 = fig.add_subplot(gs[1, 0])
@@ -563,6 +564,8 @@ def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
 
     # Add overall title if object name is provided
     if object_name:
-        fig.suptitle(f'{object_name} = {is_nuclear}', fontsize=14, y=0.93)
+        ra_center = np.nanmedian(ras)
+        dec_center = np.nanmedian(decs)
+        fig.suptitle(f'{object_name} (RA: {ra_center:.6f}, DEC: {dec_center:.6f}) = {is_nuclear}', fontsize=14, y=0.93)
 
     return sigma, chi2_val, p_val, is_nuclear, mean_separation, upper_err, lower_err, upper_limit
