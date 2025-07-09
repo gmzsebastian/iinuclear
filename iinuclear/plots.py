@@ -6,6 +6,8 @@ from astropy.visualization import ImageNormalize, LinearStretch, LogStretch, Sqr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
+import warnings
+from astropy.wcs import FITSFixedWarning
 from .utils import rice_separation, check_nuclear, calc_separations
 plt.rcParams.update({'font.size': 12})
 plt.rcParams.update({'font.family': 'serif'})
@@ -13,7 +15,8 @@ plt.rcParams.update({'font.family': 'serif'})
 
 def plot_image(image_data, image_header, ras, decs, radius_arcsec=2,
                scale='sqrt', figsize=(8, 8), ax=None, object_name=None,
-               ra_galaxy=None, dec_galaxy=None, error_arcsec=None, used_catalog=None):
+               ra_galaxy=None, dec_galaxy=None, error_arcsec=None, used_catalog=None,
+               mean_ra_offset=None, mean_dec_offset=None):
     """
     Plot PS1 image with ZTF positions overlaid in WCS coordinates.
 
@@ -45,6 +48,10 @@ def plot_image(image_data, image_header, ras, decs, radius_arcsec=2,
         Error circle radius in arcseconds
     used_catalog : str, optional
         Name of the catalog used for galaxy center determination (default: None)
+    mean_ra_offset : float, optional
+        Mean RA offset applied to ZTF positions in arcsec (default: None)
+    mean_dec_offset : float, optional
+        Mean Dec offset applied to ZTF positions in arcsec (default: None)
 
     Returns
     --------
@@ -53,7 +60,9 @@ def plot_image(image_data, image_header, ras, decs, radius_arcsec=2,
     """
 
     # Create a WCS object from the header
-    wcs = WCS(image_header)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', FITSFixedWarning)
+        wcs = WCS(image_header)
 
     # Create figure and axis with WCS projection if needed
     if ax is None:
@@ -131,7 +140,14 @@ def plot_image(image_data, image_header, ras, decs, radius_arcsec=2,
         ax.add_patch(galaxy_circle)
 
         # Plot median position
-        ax.scatter(galaxy_x, galaxy_y, s=100, color='orange', marker='*', label='Galaxy Center')
+        if mean_ra_offset is not None and mean_dec_offset is not None:
+            if mean_dec_offset > 0 and mean_ra_offset > 0:
+                offset_label = f'Galaxy Center\nOffset: RA {mean_ra_offset:.2f}", DEC {mean_dec_offset:.2f}"'
+            else:
+                offset_label = 'Galaxy Center'
+        else:
+            offset_label = 'Galaxy Center'
+        ax.scatter(galaxy_x, galaxy_y, s=100, color='orange', marker='*', label=offset_label)
 
     # Label axes
     ax.set_xlabel('RA')
@@ -370,7 +386,7 @@ def plot_detections(ras, decs, ra_galaxy=None, dec_galaxy=None, error_arcsec=Non
         radius_deg = radius_arcsec / 3600
     else:
         radius_deg = max(ra_range, dec_range) / 2
-    ax.set_xlim(-radius_deg, radius_deg)
+    ax.set_xlim(radius_deg, -radius_deg)
     ax.set_ylim(-radius_deg, radius_deg)
     ax.set_aspect('equal', adjustable='box')
 
@@ -479,6 +495,7 @@ def plot_pvalue_curve(ras, decs, ra_galaxy, dec_galaxy, error_arcsec,
 
 def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
              error_arcsec, radius_arcsec=2, object_name=None, used_catalog=None,
+             mean_ra_offset=None, mean_dec_offset=None,
              figsize=(13, 13)):
     """
     Create a 2x2 figure showing all analysis plots for a transient.
@@ -505,9 +522,12 @@ def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
         Name of the object to include in the title
     used_catalog : str, optional
         Name of the catalog used for galaxy center determination (default: None)
+    mean_ra_offset : float, optional
+        Mean RA offset applied to ZTF positions (default: None)
+    mean_dec_offset : float, optional
+        Mean Dec offset applied to ZTF positions (default: None)
     figsize : tuple, optional
         Figure size in inches (default: (12,12))
-
 
     Returns
     -------
@@ -539,7 +559,8 @@ def plot_all(image_data, image_header, ras, decs, ra_galaxy, dec_galaxy,
                radius_arcsec=radius_arcsec, ax=ax1,
                object_name=object_name,
                ra_galaxy=ra_galaxy, dec_galaxy=dec_galaxy,
-               error_arcsec=error_arcsec, used_catalog=used_catalog)
+               error_arcsec=error_arcsec, used_catalog=used_catalog,
+               mean_ra_offset=mean_ra_offset, mean_dec_offset=mean_dec_offset)
 
     # Plot 2: ZTF detections with density
     ax2 = fig.add_subplot(gs[1, 0])

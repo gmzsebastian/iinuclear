@@ -3,7 +3,7 @@ from .plots import plot_all
 import matplotlib.pyplot as plt
 
 
-def isit(*args, error=0.1, save_all=True, base_dir='.', add_sdss=True, add_ps1=True, plot=True, search_radius=60,
+def isit(*args, error=0.1, save_all=True, base_dir='.', add_sdss=True, add_ps1=True, plot=True, search_radius=120,
          coords_directory='coords'):
     """
     Main function to determine whether a transient is nuclear or not, the function takes either
@@ -49,7 +49,7 @@ def isit(*args, error=0.1, save_all=True, base_dir='.', add_sdss=True, add_ps1=T
     """
 
     ras, decs, ztf_name, iau_name, catalog_result, used_catalog, image_data, image_header = get_data(*args, save_all=save_all, base_dir=base_dir,
-                                                                                                     coords_directory=coords_directory)
+                                                                                                     coords_directory=coords_directory, plot=plot)
     if len(catalog_result) > 0:
         # Format object name
         if iau_name is not None:
@@ -69,7 +69,8 @@ def isit(*args, error=0.1, save_all=True, base_dir='.', add_sdss=True, add_ps1=T
             (sigma, chi2_val, p_val, is_nuclear,
              mean_separation, upper_err,
              lower_err, upper_limit) = plot_all(image_data, image_header, ras_mod, decs_mod, ra_galaxy, dec_galaxy, error_arcsec,
-                                                object_name=object_name, used_catalog=used_catalog)
+                                                object_name=object_name, used_catalog=used_catalog, mean_ra_offset=mean_dec_offset,
+                                                mean_dec_offset=mean_dec_offset)
             plt.savefig(f'{object_name}_iinuclear.pdf', bbox_inches='tight')
             plt.clf()
             plt.close('all')

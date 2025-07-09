@@ -503,7 +503,7 @@ def query_panstarrs(ra_deg, dec_deg, search_radius=3, DR=2):
         return None
 
 
-def get_ps1_image(ra_deg, dec_deg, size_arcsec=60, band='i', save_image=True, output_dir='images',
+def get_ps1_image(ra_deg, dec_deg, size_arcsec=60, band='r', save_image=True, output_dir='images',
                   object_name=None):
     """
     Download a PanSTARRS FITS cutout in a single band.
@@ -598,7 +598,7 @@ def get_ps1_image(ra_deg, dec_deg, size_arcsec=60, band='i', save_image=True, ou
 
 
 def get_sdss_image(ra_deg, dec_deg, size_arcsec=60, save_image=True, output_dir='images',
-                   object_name=None, band='i'):
+                   object_name=None, band='r'):
     """
     Download a SDSS FITS cutout centered on given coordinates.
 
@@ -851,7 +851,7 @@ def get_closest_match(ra_deg, dec_deg, search_radius=3, save_catalog=True, outpu
 
 
 def get_data(*args, save_all=True, base_dir='.', coords_directory='coords', catalog_directory='catalogs',
-             images_directory='images'):
+             images_directory='images', plot=True):
     """
     Get the coordinates, reference catalog, and images for a given transient.
 
@@ -917,17 +917,19 @@ def get_data(*args, save_all=True, base_dir='.', coords_directory='coords', cata
                                                          object_name=object_name)
 
         # Get PS1 image
-        if used_catalog == 'PS1':
+        if (used_catalog == 'PS1') and plot:
             image_data, image_header = get_ps1_image(ra_center, dec_center,
                                                      save_image=save_all,
                                                      output_dir=images_dir,
                                                      object_name=object_name)
-        elif used_catalog == 'SDSS':
+        elif (used_catalog == 'SDSS') and plot:
             image_data, image_header = get_sdss_image(ra_center, dec_center,
                                                       save_image=save_all,
                                                       output_dir=images_dir,
                                                       object_name=object_name)
-
+        else:
+            image_data = None
+            image_header = None
     else:
         catalog_result = None
         used_catalog = None
@@ -968,7 +970,7 @@ def query_ztf_sources(ra_deg, dec_deg, search_radius=120, band='r', ZTF_DR=22,
     coord = SkyCoord(ra=ra_deg*u.deg, dec=dec_deg*u.deg, frame='icrs')
     print(f"Querying ZTF sources around RA={ra_deg}, DEC={dec_deg}")
     result_table = Irsa.query_region(coord, catalog=catalog, spatial='Cone', radius=search_radius * u.arcsec)
-    print(f"Found {len(result_table)} sources in ZTF {band} band")
+    print(f"\nFound {len(result_table)} sources in ZTF")
 
     # Filter by band
     output_table = result_table[result_table['filtercode'] == f'z{band}']
@@ -985,7 +987,7 @@ def query_ztf_sources(ra_deg, dec_deg, search_radius=120, band='r', ZTF_DR=22,
     return output_table
 
 
-def calc_astrometric_error(ra_deg, dec_deg, object_name, search_radius=120, band='i', min_ps1_mag=22, max_diff=0.2,
+def calc_astrometric_error(ra_deg, dec_deg, object_name, search_radius=120, band='r', min_ps1_mag=22, max_diff=0.2,
                            max_separation=0.5, ZTF_DR=22, ngoodobsrel=5, min_medianmag=20, ref_dir='reference',
                            used_catalog=None):
     """
@@ -1054,6 +1056,8 @@ def calc_astrometric_error(ra_deg, dec_deg, object_name, search_radius=120, band
         # Crop ZTF table based on magnitude
         ztf_table = ztf_table_in[(ztf_table_in['medianmag'] < min_ps1_mag) & (ztf_table_in['medianmag'] > 0)]
         print("Found {} ZTF sources with medianmag < {} mag".format(len(ztf_table), min_ps1_mag))
+    else:
+        raise RuntimeError(f"No ZTF sources found within {search_radius} arcseconds")
 
     if used_catalog == 'SDSS':
         if os.path.exists(sdss_ref_name):
@@ -1149,7 +1153,7 @@ def calc_astrometric_error(ra_deg, dec_deg, object_name, search_radius=120, band
     mean_ra_offset = np.nanmedian(ra_offsets)
     mean_dec_offset = np.nanmedian(dec_offsets)
 
-    print("Mean astrometric error: {:.2f} arcsec with RA offset {:.2f} arcsec and DEC offset {:.2f} arcsec".format(
+    print("\nMean astrometric error: {:.2f} arcsec with RA offset {:.2f} arcsec and DEC offset {:.2f} arcsec".format(
         mean_abs_total, mean_ra_offset, mean_dec_offset))
     return mean_abs_total, mean_ra_offset, mean_dec_offset
 
