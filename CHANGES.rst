@@ -1,3 +1,10 @@
+0.1 (2025-07-09)
+----------------
+
+- Modified main function to allow for calibration between ZTF and PS1/SDSS.
+- Added new diagnositc metrics to plots.
+
+
 0.0.4 (2025-06-03)
 ----------------
 
